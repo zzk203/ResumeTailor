@@ -1,0 +1,49 @@
+import os
+import re
+from typing import Dict
+
+
+class TemplateParseError(Exception):
+    pass
+
+
+def generate_resume_file(
+    template_content: str,
+    fill_mapping: Dict[str, str],
+    user_name: str,
+    job_title: str,
+    company: str,
+    output_dir: str = "./output"
+) -> dict:
+    os.makedirs(output_dir, exist_ok=True)
+
+    def replace_fill(match):
+        field = match.group(1).strip()
+        if field not in fill_mapping:
+            raise TemplateParseError(f"缺少字段 '{field}' 的填充内容")
+        return fill_mapping[field]
+
+    fill_pattern = r'<!--\s*fill:([^\s>]+)\s*-->.*?<!--\s*/fill:\1\s*-->'
+    try:
+        filled = re.sub(fill_pattern, replace_fill, template_content, flags=re.DOTALL)
+    except Exception as e:
+        return {"success": False, "message": "填充替换失败", "errors": [str(e)], "file_path": None}
+
+    if re.search(r'<!--\s*(fill:|/fill:)', filled):
+        return {"success": False, "message": "模板中存在未匹配的填充标签", "errors": ["标签闭合错误"], "file_path": None}
+
+    def sanitize(s: str) -> str:
+        return re.sub(r'[\\/*?:"<>|]', '-', s).strip()
+
+    base = f"{sanitize(user_name)}-{sanitize(job_title)}-{sanitize(company)}"
+    filename = f"{base}.md"
+    counter = 1
+    while os.path.exists(os.path.join(output_dir, filename)):
+        filename = f"{base}_{counter}.md"
+        counter += 1
+
+    filepath = os.path.join(output_dir, filename)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(filled)
+
+    return {"success": True, "message": "简历生成成功", "file_path": filepath, "errors": []}
