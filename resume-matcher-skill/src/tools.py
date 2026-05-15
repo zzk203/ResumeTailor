@@ -84,6 +84,13 @@ def cmd_batch_assemble(args):
             result["file_path"] = os.path.relpath(result["file_path"])
         results.append(result)
 
+    if args.clean_json:
+        for jd_path in jd_files:
+            base = os.path.splitext(os.path.basename(jd_path))[0]
+            fill_path = os.path.join(jd_dir, base + fill_ext)
+            if os.path.exists(fill_path):
+                os.remove(fill_path)
+
     summary = {"success": True, "total": len(results), "results": results}
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
@@ -112,6 +119,7 @@ def main():
     p_batch.add_argument("jd_dir", help="JD 文件目录（内含 .md + .json 配对）")
     p_batch.add_argument("--fill-ext", default=".json", help="填充映射文件扩展名，默认 .json")
     p_batch.add_argument("--output-dir", default="./output", help="输出目录")
+    p_batch.add_argument("--clean-json", action="store_true", help="组装完成后删除所有 .json 中间文件")
 
     args = parser.parse_args()
     if args.command == "parse-jd":
