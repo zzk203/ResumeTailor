@@ -152,23 +152,28 @@ def cmd_batch_assemble(args):
         results.append(jd_result)
 
         if not getattr(args, 'no_extras', False):
-            extras_list = args.extras.split(",") if args.extras else list(EXTRAS_TEMPLATES.keys())
-            extras_params = {
-                "channel": args.channel,
-                "interview_duration": args.interview_duration,
-                "skill_focus": args.skill_focus,
-                "project_level": args.project_level,
-            }
             extras_map = {}
-            for field in extras_list:
-                prompt = generate_extras_prompt(
-                    field_name=field,
-                    jd_content=jd_content,
-                    personal_info=personal_info,
-                    writing_logic=writing_logic,
-                    **extras_params
-                )
-                extras_map[field] = prompt
+            extras_content_file = getattr(args, 'extras_content', None)
+            if extras_content_file:
+                with open(extras_content_file, 'r', encoding='utf-8') as f:
+                    extras_map = json.load(f)
+            else:
+                extras_list = args.extras.split(",") if args.extras else list(EXTRAS_TEMPLATES.keys())
+                extras_params = {
+                    "channel": args.channel,
+                    "interview_duration": args.interview_duration,
+                    "skill_focus": args.skill_focus,
+                    "project_level": args.project_level,
+                }
+                for field in extras_list:
+                    prompt = generate_extras_prompt(
+                        field_name=field,
+                        jd_content=jd_content,
+                        personal_info=personal_info,
+                        writing_logic=writing_logic,
+                        **extras_params
+                    )
+                    extras_map[field] = prompt
 
             extras_result = generate_extras_file(
                 user_name=user_name or "未知",
@@ -201,28 +206,31 @@ def cmd_generate_extras(args):
     if args.logic_file:
         writing_logic = _read_file(args.logic_file)
 
-    extras_list = args.extras.split(",") if args.extras else list(EXTRAS_TEMPLATES.keys())
-
-    extras_params = {
-        "channel": args.channel,
-        "interview_duration": args.interview_duration,
-        "skill_focus": args.skill_focus,
-        "project_level": args.project_level,
-    }
+    extras_map = {}
+    extras_content_file = getattr(args, 'extras_content', None)
+    if extras_content_file:
+        with open(extras_content_file, 'r', encoding='utf-8') as f:
+            extras_map = json.load(f)
+    else:
+        extras_list = args.extras.split(",") if args.extras else list(EXTRAS_TEMPLATES.keys())
+        extras_params = {
+            "channel": args.channel,
+            "interview_duration": args.interview_duration,
+            "skill_focus": args.skill_focus,
+            "project_level": args.project_level,
+        }
+        for field in extras_list:
+            prompt = generate_extras_prompt(
+                field_name=field,
+                jd_content=jd_content,
+                personal_info=personal_info,
+                writing_logic=writing_logic,
+                **extras_params
+            )
+            extras_map[field] = prompt
 
     user_name = extract_name(personal_info)
     job_title, company = extract_job_and_company(jd_content)
-
-    extras_map = {}
-    for field in extras_list:
-        prompt = generate_extras_prompt(
-            field_name=field,
-            jd_content=jd_content,
-            personal_info=personal_info,
-            writing_logic=writing_logic,
-            **extras_params
-        )
-        extras_map[field] = prompt
 
     result = generate_extras_file(
         user_name=user_name or "未知",
@@ -282,6 +290,7 @@ def main():
     p_batch.add_argument("--output-dir", default="./resume", help="输出目录")
     p_batch.add_argument("--clean-json", action="store_true", help="组装完成后删除所有 .json 中间文件")
     p_batch.add_argument("--logic-file", help="编写逻辑文件路径（可选）")
+    p_batch.add_argument("--extras-content", help="预生成的扩展内容 JSON 文件路径，跳过 prompt 生成")
     _add_extras_arguments(p_batch)
 
     p_extras = sub.add_parser("generate-extras", help="生成扩展求职材料（投递第一句话、面试介绍等）")
@@ -289,6 +298,7 @@ def main():
     p_extras.add_argument("personal_info_file", help="个人信息文件路径")
     p_extras.add_argument("--logic-file", help="编写逻辑文件路径（可选）")
     p_extras.add_argument("--output-dir", default="./resume", help="输出目录")
+    p_extras.add_argument("--extras-content", help="预生成的扩展内容 JSON 文件路径，跳过 prompt 生成")
     _add_extras_arguments(p_extras)
 
     args = parser.parse_args()
