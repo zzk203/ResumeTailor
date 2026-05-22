@@ -26,11 +26,13 @@ def generate_resume_file(
     fill_pattern = r'<!--\s*fill:([^\s>]+)\s*-->.*?<!--\s*/fill:\1\s*-->'
     try:
         filled = re.sub(fill_pattern, replace_fill, template_content, flags=re.DOTALL)
-    except Exception as e:
+    except (TemplateParseError, re.error) as e:
         return {"success": False, "message": "填充替换失败", "errors": [str(e)], "file_path": None}
 
-    if re.search(r'<!--\s*(fill:|/fill:)', filled):
-        return {"success": False, "message": "模板中存在未匹配的填充标签", "errors": ["标签闭合错误"], "file_path": None}
+    unmatched = re.findall(r'(<!--\s*(fill|/fill):[^>]*-->)', filled)
+    if unmatched:
+        tags = [m[0] for m in unmatched]
+        return {"success": False, "message": f"模板中存在未匹配的填充标签: {tags}", "errors": ["标签闭合错误"], "file_path": None}
 
     def sanitize(s: str) -> str:
         return re.sub(r'[\\/*?:"<>|]', '-', s).strip()

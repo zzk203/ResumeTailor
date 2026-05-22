@@ -17,13 +17,6 @@ EXTRAS_TEMPLATES = {
     "project-recommend": "project_recommend.jinja2",
 }
 
-EXTRAS_TITLE_MAP = {
-    "first-msg": "投递第一句话",
-    "interview-intro": "面试个人介绍",
-    "skill-gap": "能力补充建议",
-    "project-recommend": "练习项目推荐",
-}
-
 _jinja_env = None
 
 
@@ -37,6 +30,8 @@ def _get_jinja_env():
     return _jinja_env
 
 
+DEFAULT_WRITING_LOGIC = "使用 STAR 法则，突出与岗位最相关的经历，专业简洁，纯文本段落。"
+
 def generate_extras_prompt(field_name: str, jd_content: str, personal_info: str, writing_logic: str = "", **kwargs) -> str:
     template_name = EXTRAS_TEMPLATES.get(field_name)
     if not template_name:
@@ -45,6 +40,9 @@ def generate_extras_prompt(field_name: str, jd_content: str, personal_info: str,
     env = _get_jinja_env()
     template = env.get_template(template_name)
 
+    if not writing_logic:
+        writing_logic = DEFAULT_WRITING_LOGIC
+
     params = {
         "jd_content": jd_content,
         "personal_info": personal_info,
@@ -52,35 +50,44 @@ def generate_extras_prompt(field_name: str, jd_content: str, personal_info: str,
     }
 
     if field_name == "first-msg":
-        params["channel"] = kwargs.get("channel", "im")
+        params["channel"] = kwargs.get("channel") or "im"
     elif field_name == "interview-intro":
-        params["interview_duration"] = kwargs.get("interview_duration", "3min")
+        params["interview_duration"] = kwargs.get("interview_duration") or "3min"
     elif field_name == "skill-gap":
-        params["skill_focus"] = kwargs.get("skill_focus", "balanced")
+        params["skill_focus"] = kwargs.get("skill_focus") or "balanced"
     elif field_name == "project-recommend":
-        params["project_level"] = kwargs.get("project_level", "intermediate")
+        params["project_level"] = kwargs.get("project_level") or "intermediate"
 
     return template.render(**params)
 
 
+def _read_file(path: str) -> str:
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        print(json.dumps({"success": False, "message": f"文件未找到: {path}"}, ensure_ascii=False))
+        sys.exit(1)
+    except IOError as e:
+        print(json.dumps({"success": False, "message": f"文件读取失败: {path}", "errors": [str(e)]}, ensure_ascii=False))
+        sys.exit(1)
+
+
 def cmd_parse_jd(args):
-    with open(args.jd_file, 'r', encoding='utf-8') as f:
-        text = f.read()
+    text = _read_file(args.jd_file)
     job_title, company = extract_job_and_company(text)
     result = {"job_title": job_title, "company": company}
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_parse_template(args):
-    with open(args.template_file, 'r', encoding='utf-8') as f:
-        text = f.read()
+    text = _read_file(args.template_file)
     fields = extract_fill_fields(text)
     print(json.dumps(fields, ensure_ascii=False, indent=2))
 
 
 def cmd_assemble(args):
-    with open(args.template_file, 'r', encoding='utf-8') as f:
-        template = f.read()
+    template = _read_file(args.template_file)
     fill_mapping = json.loads(args.fill_mapping_json)
     result = generate_resume_file(
         template_content=template,
@@ -88,16 +95,14 @@ def cmd_assemble(args):
         user_name=args.user_name,
         job_title=args.job_title,
         company=args.company,
-        output_dir=args.output_dir or "./output"
+        output_dir=args.output_dir or "./resume"
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_batch_assemble(args):
-    with open(args.template_file, 'r', encoding='utf-8') as f:
-        template_content = f.read()
-    with open(args.personal_info_file, 'r', encoding='utf-8') as f:
-        personal_info = f.read()
+    template_content = _read_file(args.template_file)
+    personal_info = _read_file(args.personal_info_file)
 
     user_name = extract_name(personal_info)
     if not user_name:
@@ -106,15 +111,17 @@ def cmd_batch_assemble(args):
 
     writing_logic = ""
     if args.logic_file:
-        with open(args.logic_file, 'r', encoding='utf-8') as f:
-            writing_logic = f.read()
+        writing_logic = _read_file(args.logic_file)
 
     jd_dir = args.jd_dir
     fill_ext = args.fill_ext or ".json"
-    output_dir = args.output_dir or "./output"
+    output_dir = args.output_dir or "./resume"
     os.makedirs(output_dir, exist_ok=True)
 
     jd_files = sorted(glob.glob(os.path.join(jd_dir, '*.md')))
+    if not jd_files:
+        print(json.dumps({"success": False, "message": f"未在目录 '{jd_dir}' 中找到任何 .md 文件"}, ensure_ascii=False))
+        return
     results = []
 
     for jd_path in jd_files:
@@ -187,15 +194,12 @@ def cmd_batch_assemble(args):
 
 
 def cmd_generate_extras(args):
-    with open(args.jd_file, 'r', encoding='utf-8') as f:
-        jd_content = f.read()
-    with open(args.personal_info_file, 'r', encoding='utf-8') as f:
-        personal_info = f.read()
+    jd_content = _read_file(args.jd_file)
+    personal_info = _read_file(args.personal_info_file)
 
     writing_logic = ""
     if args.logic_file:
-        with open(args.logic_file, 'r', encoding='utf-8') as f:
-            writing_logic = f.read()
+        writing_logic = _read_file(args.logic_file)
 
     extras_list = args.extras.split(",") if args.extras else list(EXTRAS_TEMPLATES.keys())
 
@@ -225,7 +229,7 @@ def cmd_generate_extras(args):
         job_title=job_title or "未知",
         company=company or "未知",
         extras_map=extras_map,
-        output_dir=args.output_dir or "./output"
+        output_dir=args.output_dir or "./resume"
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
@@ -241,14 +245,14 @@ def _add_extras_arguments(parser):
     parser.add_argument("--extras", default=",".join(EXTRAS_CHOICES),
                         help=f"需生成的扩展子项，逗号分隔。选项: {','.join(EXTRAS_CHOICES)}，默认全部")
     parser.add_argument("--no-extras", action="store_true", help="关闭扩展文件生成")
-    parser.add_argument("--channel", choices=CHANNEL_CHOICES, default=None,
-                        help="投递渠道（im/email），用于生成投递第一句话")
-    parser.add_argument("--interview-duration", choices=DURATION_CHOICES, default=None,
-                        help="面试自我介绍时长（1min/3min）")
-    parser.add_argument("--skill-focus", choices=SKILL_FOCUS_CHOICES, default=None,
-                        help="能力补充建议聚焦方向（gap/strength/balanced）")
-    parser.add_argument("--project-level", choices=PROJECT_LEVEL_CHOICES, default=None,
-                        help="练习项目推荐难度（beginner/intermediate/advanced）")
+    parser.add_argument("--channel", choices=CHANNEL_CHOICES, default="im",
+                        help="投递渠道（im/email），用于生成投递第一句话，默认 im")
+    parser.add_argument("--interview-duration", choices=DURATION_CHOICES, default="3min",
+                        help="面试自我介绍时长（1min/3min），默认 3min")
+    parser.add_argument("--skill-focus", choices=SKILL_FOCUS_CHOICES, default="balanced",
+                        help="能力补充建议聚焦方向（gap/strength/balanced），默认 balanced")
+    parser.add_argument("--project-level", choices=PROJECT_LEVEL_CHOICES, default="intermediate",
+                        help="练习项目推荐难度（beginner/intermediate/advanced），默认 intermediate")
 
 
 

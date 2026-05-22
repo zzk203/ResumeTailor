@@ -13,6 +13,10 @@ class TestExtractName:
     def test_empty(self):
         assert extract_name("") == ""
 
+    def test_with_bold_markers(self):
+        assert extract_name("**姓名**：**张三**") == "张三"
+        assert extract_name("**姓名：**张三**") == "张三"
+
 
 class TestExtractJobAndCompany:
     def test_normal(self):

@@ -4,7 +4,11 @@ from typing import List, Tuple
 
 def extract_name(text: str) -> str:
     match = re.search(r'\*{0,2}姓名\*{0,2}[:：]\s*(.+)', text)
-    return match.group(1).strip() if match else ""
+    if not match:
+        return ""
+    name = match.group(1).strip()
+    name = name.strip('*')
+    return name
 
 
 def extract_job_and_company(jd_text: str) -> Tuple[str, str]:
@@ -14,7 +18,7 @@ def extract_job_and_company(jd_text: str) -> Tuple[str, str]:
 
 
 def extract_fill_fields(template: str) -> List[str]:
-    pattern = r'<!--\s*fill:(.*?)\s*-->'
+    pattern = r'<!--\s*fill:([^\s>]+)\s*-->'
     matches = re.findall(pattern, template)
     fields = []
     seen = set()
