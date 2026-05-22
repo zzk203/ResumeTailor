@@ -1,4 +1,10 @@
 my_resume/
+.opencode/
+openspec/
+jd/*
+jd_raw/*
+resume/*
+personal
 doc/
 __pycache__/
 *.pyc

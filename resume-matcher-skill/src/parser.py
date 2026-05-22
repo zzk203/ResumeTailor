@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 
 def extract_name(text: str) -> str:
-    match = re.search(r'姓名[:：]\s*(.+)', text)
+    match = re.search(r'\*{0,2}姓名\*{0,2}[:：]\s*(.+)', text)
     return match.group(1).strip() if match else ""
 
 
