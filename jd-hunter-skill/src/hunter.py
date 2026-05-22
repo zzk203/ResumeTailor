@@ -24,7 +24,10 @@ def _get_jinja_env():
     return _jinja_env
 
 
-def infer_job_titles(personal_info: str) -> list:
+def infer_job_titles(personal_info: str, suggested_titles: list = None) -> list:
+    if suggested_titles is not None:
+        return suggested_titles if suggested_titles else [{"job_title": "软件工程师", "reason": "默认"}]
+
     env = _get_jinja_env()
     template = env.get_template("infer_jobs.jinja2")
     prompt = template.render(personal_info=personal_info)
@@ -65,7 +68,7 @@ def search_jd_on_channel(channel: dict, job_title: str, city: str = "", experien
 
     try:
         result = subprocess.run(
-            [channel["search_cmd"], query],
+            ["opencli"] + channel["search_cmd"].split() + [query],
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:

@@ -19,7 +19,12 @@ def _get_jinja_env():
     return _jinja_env
 
 
-def score_jd_batch(jd_list: list, personal_info: str) -> list:
+def score_jd_batch(jd_list: list, personal_info: str, scores: list = None) -> list:
+    if scores is not None:
+        for i, jd in enumerate(jd_list):
+            jd["score"] = scores[i] if i < len(scores) else 0
+        return jd_list
+
     env = _get_jinja_env()
     template = env.get_template("score_jd.jinja2")
     scored = []
@@ -47,8 +52,8 @@ def filter_high_score(scored_list: list, threshold: int = SCORE_THRESHOLD) -> li
     return [jd for jd in scored_list if jd.get("score", 0) >= threshold]
 
 
-def score_and_filter(jd_list: list, personal_info: str, threshold: int = SCORE_THRESHOLD) -> list:
-    scored = score_jd_batch(jd_list, personal_info)
+def score_and_filter(jd_list: list, personal_info: str, threshold: int = SCORE_THRESHOLD, scores: list = None) -> list:
+    scored = score_jd_batch(jd_list, personal_info, scores=scores)
     return filter_high_score(scored, threshold)
 
 

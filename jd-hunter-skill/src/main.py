@@ -16,7 +16,7 @@ def cmd_hunt(args):
     threshold = args.threshold
 
     print("\n=== 步骤1: 推断目标岗位 ===")
-    job_titles = infer_job_titles(personal_info)
+    job_titles = infer_job_titles(personal_info, args.job_titles)
     print(f"选定岗位: {[j['job_title'] for j in job_titles]}")
 
     all_raw_jds = []
@@ -38,6 +38,8 @@ def cmd_hunt(args):
         for job in job_titles:
             title = job["job_title"]
             for channel in CHANNELS:
+                if args.channels and channel["name"] not in args.channels:
+                    continue
                 print(f"\n在 {channel['label']} 搜索「{title}」...", file=sys.stderr)
                 listings = search_jd_on_channel(channel, title, args.city, args.experience)
                 for item in listings:
@@ -49,6 +51,16 @@ def cmd_hunt(args):
 
     if not all_raw_jds:
         print("\n无 JD 数据。可使用 --jd-file 传入原始 JD 文件，或直接运行 score/extract/index 子命令。")
+        return
+
+    if args.no_llm:
+        for jd in all_raw_jds:
+            save_raw_jd(jd, jd.get("channel", "unknown"))
+        print(json.dumps({
+            "success": True,
+            "total_raw": len(all_raw_jds),
+            "message": "仅保存原始 JD（--no-llm）",
+        }, ensure_ascii=False, indent=2))
         return
 
     print(f"\n=== 步骤3: JD 评分（共 {len(all_raw_jds)} 条，阈值 ≥{threshold}）===")
@@ -123,7 +135,7 @@ def cmd_score(args):
             "job_title": name.split("-")[1] if "-" in name else name,
         })
 
-    scored = score_jd_batch(jd_list, personal_info)
+    scored = score_jd_batch(jd_list, personal_info, scores=args.scores)
     threshold = args.threshold
     if threshold is not None:
         filtered = [jd for jd in scored if jd.get("score", 0) >= threshold]
@@ -137,7 +149,7 @@ def cmd_extract(args):
     with open(args.jd_file, "r", encoding="utf-8") as f:
         raw_content = f.read()
 
-    fields = extract_jd_fields(raw_content, args.channel or "", args.url or "")
+    fields = extract_jd_fields(raw_content, args.channel or "", args.url or "", fields_override=args.fields)
     filepath = save_structured_jd(fields)
     result = {"fields": fields, "output_path": filepath}
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -160,6 +172,9 @@ def main():
     p_hunt.add_argument("--experience", default="", help="经验年限")
     p_hunt.add_argument("--jd-file", action="append", help="直接传入原始 JD 文件（可多次使用，跳过搜索步骤）")
     p_hunt.add_argument("-t", "--threshold", type=int, default=SCORE_THRESHOLD, help=f"评分阈值（默认 {SCORE_THRESHOLD} 分）")
+    p_hunt.add_argument("--job-titles", type=json.loads, default=None, help="非交互模式：直接指定岗位列表 JSON，跳过 LLM 推断")
+    p_hunt.add_argument("--channels", nargs="*", default=None, help="限定搜索渠道（如 boss liepin），不传则全部")
+    p_hunt.add_argument("--no-llm", action="store_true", help="非交互模式：跳过评分和提取，仅搜索并保存原始 JD")
 
     p_search = sub.add_parser("search", help="在指定渠道搜索 JD")
     p_search.add_argument("channel", choices=[c["name"] for c in CHANNELS], help="渠道名称")
@@ -171,11 +186,13 @@ def main():
     p_score.add_argument("jd_file", nargs="+", help="JD 文件路径（可多个）")
     p_score.add_argument("personal_info", help="个人信息文件路径")
     p_score.add_argument("-t", "--threshold", type=int, help=f"评分阈值（可选，指定后只输出匹配结果）")
+    p_score.add_argument("--scores", type=json.loads, default=None, help="非交互模式：直接提供评分列表 JSON（如 [8, 7, 9]）")
 
     p_extract = sub.add_parser("extract", help="提取 JD 结构化字段（交互式）")
     p_extract.add_argument("jd_file", help="原始 JD 文件路径")
     p_extract.add_argument("--channel", default="", help="来源渠道")
     p_extract.add_argument("--url", default="", help="JD 详情页 URL")
+    p_extract.add_argument("--fields", type=json.loads, default=None, help="非交互模式：直接提供结构化字段 JSON")
 
     p_index = sub.add_parser("index", help="生成 JD 索引文件")
     p_index.add_argument("--jd-dir", default="jd", help="JD 文件目录")

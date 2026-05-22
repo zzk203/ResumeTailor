@@ -56,15 +56,23 @@ def infer_source_metadata(raw_content: str, channel_name: str = "", url: str = "
     }
 
 
-def extract_jd_fields(raw_content: str, channel_name: str = "", url: str = "") -> dict:
+def extract_jd_fields(raw_content: str, channel_name: str = "", url: str = "", fields_override: dict = None) -> dict:
+    fields = dict(DEFAULT_FIELDS)
+
+    if fields_override is not None:
+        fields.update({k: v for k, v in fields_override.items() if v and v != "未知"})
+        metadata = infer_source_metadata(raw_content, channel_name, url)
+        for key, value in metadata.items():
+            if fields.get(key) in ("未知", None, ""):
+                fields[key] = value
+        return fields
+
     env = _get_jinja_env()
     template = env.get_template("extract_fields.jinja2")
     prompt = template.render(raw_jd=raw_content)
 
     print(prompt, file=sys.stderr)
     print("---请在上方 prompt 的基础上，输出 JSON 结构化字段---", file=sys.stderr)
-
-    fields = dict(DEFAULT_FIELDS)
 
     try:
         response = input().strip()
