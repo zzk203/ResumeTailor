@@ -6,6 +6,7 @@ jd_raw/*
 resume/*
 personal
 doc/
+AGENTS.md
 __pycache__/
 *.pyc
 .pytest_cache/
