@@ -43,7 +43,7 @@ python -m jd-hunter-skill.src.main index [--jd-dir]
 - JD 文件必须有 `岗位名称：...` 和 `公司：...`
 - 个人信息必须有 `姓名：...`
 - 输出文件: `{姓名}-{岗位}-{公司}.md`，冲突加数字后缀
-- 输出目录默认 `./output`（若不存在自动创建）
+- 输出目录默认 `./resume`（若不存在自动创建）
 - 无 lint/typecheck 配置，仅 pytest
 
 ## Prompts 与外部 LLM
@@ -51,7 +51,7 @@ python -m jd-hunter-skill.src.main index [--jd-dir]
 - 两包均用 `jinja2` + `PackageLoader` 加载 prompt 模板
   - resume-matcher: `PackageLoader("resume-matcher-skill.src", "prompt_templates")`
   - jd-hunter: `PackageLoader("jd-hunter-skill.src", "prompt_templates")`
-- LLM 调用通过 subprocess 调用外部工具完成（非 SDK 直连）
+- LLM 调用通过 当前agent自己生成
 
 ## extras 扩展材料管线
 

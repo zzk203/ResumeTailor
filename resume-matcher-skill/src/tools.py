@@ -104,6 +104,11 @@ def cmd_batch_assemble(args):
         print(json.dumps({"success": False, "message": "个人信息文件中未找到姓名"}, ensure_ascii=False))
         return
 
+    writing_logic = ""
+    if args.logic_file:
+        with open(args.logic_file, 'r', encoding='utf-8') as f:
+            writing_logic = f.read()
+
     jd_dir = args.jd_dir
     fill_ext = args.fill_ext or ".json"
     output_dir = args.output_dir or "./output"
@@ -126,7 +131,7 @@ def cmd_batch_assemble(args):
         with open(fill_path, 'r', encoding='utf-8') as f:
             fill_mapping = json.load(f)
 
-        result = generate_resume_file(
+        jd_result = generate_resume_file(
             template_content=template_content,
             fill_mapping=fill_mapping,
             user_name=user_name,
@@ -134,10 +139,41 @@ def cmd_batch_assemble(args):
             company=company,
             output_dir=output_dir
         )
-        result["jd"] = base
-        if result["success"]:
-            result["file_path"] = os.path.relpath(result["file_path"])
-        results.append(result)
+        jd_result["jd"] = base
+        if jd_result["success"]:
+            jd_result["file_path"] = os.path.relpath(jd_result["file_path"])
+        results.append(jd_result)
+
+        if not getattr(args, 'no_extras', False):
+            extras_list = args.extras.split(",") if args.extras else list(EXTRAS_TEMPLATES.keys())
+            extras_params = {
+                "channel": args.channel,
+                "interview_duration": args.interview_duration,
+                "skill_focus": args.skill_focus,
+                "project_level": args.project_level,
+            }
+            extras_map = {}
+            for field in extras_list:
+                prompt = generate_extras_prompt(
+                    field_name=field,
+                    jd_content=jd_content,
+                    personal_info=personal_info,
+                    writing_logic=writing_logic,
+                    **extras_params
+                )
+                extras_map[field] = prompt
+
+            extras_result = generate_extras_file(
+                user_name=user_name or "未知",
+                job_title=job_title or "未知",
+                company=company or "未知",
+                extras_map=extras_map,
+                output_dir=output_dir
+            )
+            extras_result["jd"] = base
+            if extras_result["success"]:
+                extras_result["file_path"] = os.path.relpath(extras_result["file_path"])
+            results.append(extras_result)
 
     if args.clean_json:
         for jd_path in jd_files:
@@ -234,13 +270,15 @@ def main():
     p_assemble.add_argument("company", help="公司名称")
     p_assemble.add_argument("--output-dir", default="./resume", help="输出目录")
 
-    p_batch = sub.add_parser("batch-assemble", help="批量组装简历")
+    p_batch = sub.add_parser("batch-assemble", help="批量组装简历（含扩展材料）")
     p_batch.add_argument("template_file", help="模板文件路径")
     p_batch.add_argument("personal_info_file", help="个人信息文件路径")
     p_batch.add_argument("jd_dir", help="JD 文件目录（内含 .md + .json 配对）")
     p_batch.add_argument("--fill-ext", default=".json", help="填充映射文件扩展名，默认 .json")
     p_batch.add_argument("--output-dir", default="./resume", help="输出目录")
     p_batch.add_argument("--clean-json", action="store_true", help="组装完成后删除所有 .json 中间文件")
+    p_batch.add_argument("--logic-file", help="编写逻辑文件路径（可选）")
+    _add_extras_arguments(p_batch)
 
     p_extras = sub.add_parser("generate-extras", help="生成扩展求职材料（投递第一句话、面试介绍等）")
     p_extras.add_argument("jd_file", help="岗位描述文件路径")
