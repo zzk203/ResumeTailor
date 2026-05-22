@@ -4,7 +4,7 @@ import os
 import sys
 
 from .hunter import CHANNELS, infer_job_titles, search_jd_on_channel, fetch_jd_detail
-from .scorer import score_jd_batch, filter_high_score, save_raw_jd
+from .scorer import SCORE_THRESHOLD, score_jd_batch, filter_high_score, score_and_filter, save_raw_jd
 from .extractor import extract_jd_fields, save_structured_jd
 from .indexer import generate_jd_index, get_index_report
 
@@ -12,6 +12,8 @@ from .indexer import generate_jd_index, get_index_report
 def cmd_hunt(args):
     with open(args.personal_info, "r", encoding="utf-8") as f:
         personal_info = f.read()
+
+    threshold = args.threshold
 
     print("\n=== 步骤1: 推断目标岗位 ===")
     job_titles = infer_job_titles(personal_info)
@@ -49,33 +51,31 @@ def cmd_hunt(args):
         print("\n无 JD 数据。可使用 --jd-file 传入原始 JD 文件，或直接运行 score/extract/index 子命令。")
         return
 
-    print(f"\n=== 步骤3: JD 评分（共 {len(all_raw_jds)} 条）===")
+    print(f"\n=== 步骤3: JD 评分（共 {len(all_raw_jds)} 条，阈值 ≥{threshold}）===")
     for channel in CHANNELS:
         channel_jds = [jd for jd in all_raw_jds if jd.get("channel") == channel["name"]]
         if not channel_jds:
             print(f"{channel['label']}: 0 条")
             continue
 
-        scored = score_jd_batch(channel_jds, personal_info)
-        high_score = filter_high_score(scored)
+        high_score = score_and_filter(channel_jds, personal_info, threshold)
 
         for jd in high_score:
             save_raw_jd(jd, channel["name"])
 
-        print(f"{channel['label']}: {len(scored)} 条 JD, 匹配 {len(high_score)} 条")
+        print(f"{channel['label']}: 匹配 {len(high_score)} 条")
 
     manual_jds = [jd for jd in all_raw_jds if jd.get("channel") == "manual"]
     if manual_jds:
-        scored = score_jd_batch(manual_jds, personal_info)
-        high_score = filter_high_score(scored)
+        high_score = score_and_filter(manual_jds, personal_info, threshold)
         for jd in high_score:
             save_raw_jd(jd, "manual")
-        print(f"手动输入: {len(scored)} 条 JD, 匹配 {len(high_score)} 条")
+        print(f"手动输入: 匹配 {len(high_score)} 条")
 
     print("\n=== 步骤4: 提取结构化字段 ===")
     structured_files = []
     for jd in all_raw_jds:
-        if jd.get("score", 0) >= 7:
+        if jd.get("score", 0) >= threshold:
             fields = extract_jd_fields(
                 jd.get("content", ""),
                 channel_name=jd.get("channel", ""),
@@ -109,14 +109,28 @@ def cmd_search(args):
 
 
 def cmd_score(args):
-    with open(args.jd_file, "r", encoding="utf-8") as f:
-        jd_content = f.read()
     with open(args.personal_info, "r", encoding="utf-8") as f:
         personal_info = f.read()
 
-    jd_list = [{"content": jd_content}]
+    jd_list = []
+    for jd_path in args.jd_file:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        name = os.path.splitext(os.path.basename(jd_path))[0]
+        jd_list.append({
+            "content": content,
+            "company": name.split("-")[0] if "-" in name else "",
+            "job_title": name.split("-")[1] if "-" in name else name,
+        })
+
     scored = score_jd_batch(jd_list, personal_info)
-    print(json.dumps(scored, ensure_ascii=False, indent=2))
+    threshold = args.threshold
+    if threshold is not None:
+        filtered = [jd for jd in scored if jd.get("score", 0) >= threshold]
+        print(f"阈值 ≥{threshold}: {len(filtered)}/{len(scored)} 条匹配\n")
+        print(json.dumps(filtered, ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(scored, ensure_ascii=False, indent=2))
 
 
 def cmd_extract(args):
@@ -145,6 +159,7 @@ def main():
     p_hunt.add_argument("--city", default="", help="目标城市")
     p_hunt.add_argument("--experience", default="", help="经验年限")
     p_hunt.add_argument("--jd-file", action="append", help="直接传入原始 JD 文件（可多次使用，跳过搜索步骤）")
+    p_hunt.add_argument("-t", "--threshold", type=int, default=SCORE_THRESHOLD, help=f"评分阈值（默认 {SCORE_THRESHOLD} 分）")
 
     p_search = sub.add_parser("search", help="在指定渠道搜索 JD")
     p_search.add_argument("channel", choices=[c["name"] for c in CHANNELS], help="渠道名称")
@@ -153,8 +168,9 @@ def main():
     p_search.add_argument("--experience", default="", help="经验年限")
 
     p_score = sub.add_parser("score", help="JD 匹配度评分（交互式）")
-    p_score.add_argument("jd_file", help="JD 文件路径")
+    p_score.add_argument("jd_file", nargs="+", help="JD 文件路径（可多个）")
     p_score.add_argument("personal_info", help="个人信息文件路径")
+    p_score.add_argument("-t", "--threshold", type=int, help=f"评分阈值（可选，指定后只输出匹配结果）")
 
     p_extract = sub.add_parser("extract", help="提取 JD 结构化字段（交互式）")
     p_extract.add_argument("jd_file", help="原始 JD 文件路径")

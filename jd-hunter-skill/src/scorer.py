@@ -47,6 +47,11 @@ def filter_high_score(scored_list: list, threshold: int = SCORE_THRESHOLD) -> li
     return [jd for jd in scored_list if jd.get("score", 0) >= threshold]
 
 
+def score_and_filter(jd_list: list, personal_info: str, threshold: int = SCORE_THRESHOLD) -> list:
+    scored = score_jd_batch(jd_list, personal_info)
+    return filter_high_score(scored, threshold)
+
+
 def save_raw_jd(jd: dict, channel_name: str, output_base: str = "jd_raw") -> str:
     company = jd.get("company", "未知公司")
     position = jd.get("job_title", "未知岗位")
