@@ -13,7 +13,7 @@ def generate_resume_file(
     user_name: str,
     job_title: str,
     company: str,
-    output_dir: str = "./output"
+    output_dir: str = "./resume"
 ) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -54,7 +54,7 @@ def generate_extras_file(
     job_title: str,
     company: str,
     extras_map: Dict[str, str],
-    output_dir: str = "./output"
+    output_dir: str = "./resume"
 ) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
