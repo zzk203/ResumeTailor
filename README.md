@@ -30,7 +30,7 @@ python -m resume-matcher-skill.src.tools generate-extras <jd> <personal> [--logi
 
 # jd-hunter CLI
 python -m jd-hunter-skill.src.main --help
-python -m jd-hunter-skill.src.main hunt personal_info.md [--city] [--experience] [--jd-file]
+python -m jd-hunter-skill.src.main hunt personal_info.md [--city] [--experience] [--jd-file] [--threshold/-t <分>]
 python -m jd-hunter-skill.src.main search <channel> <job_title> [--city] [--experience]
 python -m jd-hunter-skill.src.main score <jd_file> <personal_info>
 python -m jd-hunter-skill.src.main extract <raw_jd> [--channel] [--url]
